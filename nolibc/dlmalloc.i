@@ -828,6 +828,7 @@ extern "C" {
 #define dlmalloc_stats         malloc_stats
 #define dlmalloc_usable_size   malloc_usable_size
 #define dlmalloc_footprint     malloc_footprint
+#define dlmalloc_footprint_alt malloc_footprint_alt
 #define dlmalloc_max_footprint malloc_max_footprint
 #define dlmalloc_footprint_limit malloc_footprint_limit
 #define dlmalloc_set_footprint_limit malloc_set_footprint_limit
@@ -974,6 +975,14 @@ DLMALLOC_EXPORT int dlmallopt(int, int);
   so results might not be up to date.
 */
 DLMALLOC_EXPORT size_t dlmalloc_footprint(void);
+
+
+/*
+  var init for malloc_footprint_alt
+*/
+static size_t footprint_alt_current_mem = 0;
+DLMALLOC_EXPORT size_t dlmalloc_footprint_alt(void);
+
 
 /*
   malloc_max_footprint();
@@ -4362,6 +4371,7 @@ static int sys_trim(mstate m, size_t pad) {
 */
 static void dispose_chunk(mstate m, mchunkptr p, size_t psize) {
   mchunkptr next = chunk_plus_offset(p, psize);
+  footprint_alt_current_mem -= chunksize(p);
   if (!pinuse(p)) {
     mchunkptr prev;
     size_t prevsize = p->prev_foot;
@@ -4671,6 +4681,7 @@ void* dlmalloc(size_t bytes) {
     mem = sys_alloc(gm, nb);
 
   postaction:
+    footprint_alt_current_mem += chunksize(mem2chunk(mem));
     POSTACTION(gm);
     return mem;
   }
@@ -4689,6 +4700,7 @@ void dlfree(void* mem) {
 
   if (mem != 0) {
     mchunkptr p  = mem2chunk(mem);
+    footprint_alt_current_mem -= chunksize(p);
 #if FOOTERS
     mstate fm = get_mstate_for(p);
     if (!ok_magic(fm)) {
@@ -5348,6 +5360,10 @@ int dlmalloc_trim(size_t pad) {
 
 size_t dlmalloc_footprint(void) {
   return gm->footprint;
+}
+
+size_t dlmalloc_footprint_alt(void) {
+  return footprint_alt_current_mem;
 }
 
 size_t dlmalloc_max_footprint(void) {
